@@ -15,23 +15,41 @@ export default function App() {
   useEffect(() => {
     fetch('/movies.json')
       .then(res => res.json())
-      .then(data => setDatabase(data))
+      .then(data => {
+        // Ensure data is an array
+        if (Array.isArray(data)) {
+          setDatabase(data);
+        } else if (data.movies && Array.isArray(data.movies)) {
+          setDatabase(data.movies);
+        }
+      })
       .catch(err => console.error("Error loading movies:", err));
   }, []);
 
+  // Robust Search handling title and aspect-based NLP matching
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     setIsFinding(true);
     
+    const query = searchQuery.toLowerCase().trim();
+    const queryWords = query.split(/\s+/);
+
     let results = database.filter(movie => {
-      const title = movie.title || movie.original_title || '';
-      const textFields = movie.description || movie.review || movie.overview || movie.summary || movie.text || movie.plot || '';
-      const query = searchQuery.toLowerCase();
-      
-      return title.toLowerCase().includes(query) || textFields.toLowerCase().includes(query);
+      // Pull titles explicitly based on common CSV conventions
+      const movieTitle = (movie.title || movie.movie_title || movie.original_title || '').toLowerCase();
+      const movieReview = (movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || '').toLowerCase();
+      const movieAspects = (movie.aspects || movie.tags || movie.category || '').toLowerCase();
+
+      // Check if title matches directly
+      const titleMatch = movieTitle.includes(query);
+
+      // Check aspect-based or NLP keyword match across reviews and tags
+      const contentMatch = queryWords.every(word => movieReview.includes(word) || movieAspects.includes(word));
+
+      return titleMatch || contentMatch;
     });
     
-    setTimeout(() => setIsFinding(false), 300);
+    setTimeout(() => setIsFinding(false), 200);
     return results.slice(0, maxResults || 20);
   }, [searchQuery, database, maxResults]);
 
@@ -42,9 +60,9 @@ export default function App() {
   };
 
   const toggleWatchlist = (movie) => {
-    const movieTitle = movie.title || movie.original_title;
-    if (watchlist.find(m => (m.title || m.original_title) === movieTitle)) {
-      setWatchlist(watchlist.filter(m => (m.title || m.original_title) !== movieTitle));
+    const movieTitle = movie.title || movie.movie_title || movie.original_title;
+    if (watchlist.find(m => (m.title || m.movie_title || m.original_title) === movieTitle)) {
+      setWatchlist(watchlist.filter(m => (m.title || m.movie_title || m.original_title) !== movieTitle));
     } else {
       setWatchlist([...watchlist, movie]);
     }
@@ -53,7 +71,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex flex-col xl:flex-row">
       
-      {/* Fixed Sidebar */}
+      {/* Sidebar */}
       <div className="w-full xl:w-[360px] bg-white border-r border-gray-200 flex flex-col shadow-sm flex-shrink-0 z-10">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center">
@@ -91,7 +109,7 @@ export default function App() {
                     type="text" 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="e.g. mind-blowing plot..."
+                    placeholder="e.g. mind-blowing plot or title..."
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
@@ -117,7 +135,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Content */}
       <div className="flex-1 bg-gray-50 p-6 md:p-8 overflow-y-auto">
         {activeTab === 'search' ? (
           searchQuery.trim() === '' ? (
@@ -194,11 +212,12 @@ export default function App() {
 }
 
 function MovieCard({ movie, toggleWatchlist, watchlist }) {
-  const title = movie.title || movie.original_title || 'Unknown Title';
-  const description = movie.description || movie.review || movie.overview || movie.summary || movie.text || movie.plot || 'No description available for this title.';
+  // Pull exact title fields from your CSV data structure
+  const title = movie.title || movie.movie_title || movie.original_title || 'Untitled Movie';
+  const description = movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || 'No review or description available.';
   const imageUrl = movie.posterUrl || (movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=500&q=80');
   
-  const isWatchlisted = !!watchlist.find(m => (m.title || m.original_title) === title);
+  const isWatchlisted = !!watchlist.find(m => (m.title || m.movie_title || m.original_title) === title);
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group flex flex-col">
