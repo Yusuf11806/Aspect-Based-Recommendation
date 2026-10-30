@@ -5,14 +5,13 @@ export default function App() {
   const [database, setDatabase] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [maxResults, setMaxResults] = useState(20);
-  const [activeTab, setActiveTab] = useState('search'); // 'search' or 'recommendations'
+  const [activeTab, setActiveTab] = useState('search');
   const [watchlist, setWatchlist] = useState([]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [isFinding, setIsFinding] = useState(false);
   const [authForm, setAuthForm] = useState({ email: '', password: '', isLogin: true });
 
-  // Fetch the generated JSON database on load
   useEffect(() => {
     fetch('/movies.json')
       .then(res => res.json())
@@ -20,18 +19,19 @@ export default function App() {
       .catch(err => console.error("Error loading movies:", err));
   }, []);
 
-  // Filter based on search query and limit dynamically
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     setIsFinding(true);
     
-    let results = database.filter(movie => 
-      (movie.title && movie.title.toLowerCase().includes(searchQuery.toLowerCase())) || 
-      (movie.review && movie.review.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (movie.description && movie.description.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    let results = database.filter(movie => {
+      const title = movie.title || movie.original_title || '';
+      const textFields = movie.description || movie.review || movie.overview || movie.summary || movie.text || movie.plot || '';
+      const query = searchQuery.toLowerCase();
+      
+      return title.toLowerCase().includes(query) || textFields.toLowerCase().includes(query);
+    });
     
-    setTimeout(() => setIsFinding(false), 300); // Simulate network/finding delay for UI
+    setTimeout(() => setIsFinding(false), 300);
     return results.slice(0, maxResults || 20);
   }, [searchQuery, database, maxResults]);
 
@@ -42,8 +42,9 @@ export default function App() {
   };
 
   const toggleWatchlist = (movie) => {
-    if (watchlist.find(m => m.title === movie.title)) {
-      setWatchlist(watchlist.filter(m => m.title !== movie.title));
+    const movieTitle = movie.title || movie.original_title;
+    if (watchlist.find(m => (m.title || m.original_title) === movieTitle)) {
+      setWatchlist(watchlist.filter(m => (m.title || m.original_title) !== movieTitle));
     } else {
       setWatchlist([...watchlist, movie]);
     }
@@ -52,11 +53,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex flex-col xl:flex-row">
       
-      {/* Fixed Sidebar for Search/Nav */}
+      {/* Fixed Sidebar */}
       <div className="w-full xl:w-[360px] bg-white border-r border-gray-200 flex flex-col shadow-sm flex-shrink-0 z-10">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center">
-            <img src="image_2ab439.png" alt="PeakM Logo" className="h-8 w-8 mr-3 object-contain" />
+            <img src="/image_2ab439.png" alt="PeakM Logo" className="h-8 w-8 mr-3 object-contain" />
             <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">PeakM</h1>
           </div>
           <button onClick={() => setIsAuthModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
@@ -116,7 +117,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Responsive Main Content Grid */}
+      {/* Main Content Grid */}
       <div className="flex-1 bg-gray-50 p-6 md:p-8 overflow-y-auto">
         {activeTab === 'search' ? (
           searchQuery.trim() === '' ? (
@@ -127,7 +128,7 @@ export default function App() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {searchResults.map((movie, idx) => (
-                <MovieCard key={idx} movie={movie} toggleWatchlist={toggleWatchlist} isWatchlisted={!!watchlist.find(m => m.title === movie.title)} />
+                <MovieCard key={idx} movie={movie} toggleWatchlist={toggleWatchlist} watchlist={watchlist} />
               ))}
             </div>
           )
@@ -142,7 +143,7 @@ export default function App() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {watchlist.map((movie, idx) => (
-                  <MovieCard key={idx} movie={movie} toggleWatchlist={toggleWatchlist} isWatchlisted={true} />
+                  <MovieCard key={idx} movie={movie} toggleWatchlist={toggleWatchlist} watchlist={watchlist} />
                 ))}
               </div>
             )}
@@ -150,7 +151,7 @@ export default function App() {
         )}
       </div>
 
-      {/* Frosted Glass Auth Modal */}
+      {/* Auth Modal */}
       {isAuthModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white/95 p-8 rounded-2xl w-full max-w-md shadow-2xl relative border border-gray-100">
@@ -192,16 +193,19 @@ export default function App() {
   );
 }
 
-function MovieCard({ movie, toggleWatchlist, isWatchlisted }) {
-  // Use TMDB placeholder logic if a direct posterUrl isn't provided
+function MovieCard({ movie, toggleWatchlist, watchlist }) {
+  const title = movie.title || movie.original_title || 'Unknown Title';
+  const description = movie.description || movie.review || movie.overview || movie.summary || movie.text || movie.plot || 'No description available for this title.';
   const imageUrl = movie.posterUrl || (movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=500&q=80');
+  
+  const isWatchlisted = !!watchlist.find(m => (m.title || m.original_title) === title);
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group flex flex-col">
       <div className="h-72 w-full bg-gray-200 relative overflow-hidden">
         <img 
           src={imageUrl} 
-          alt={movie.title || 'Movie Poster'} 
+          alt={title} 
           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500" 
           onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=500&q=80' }}
         />
@@ -211,7 +215,7 @@ function MovieCard({ movie, toggleWatchlist, isWatchlisted }) {
       </div>
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-2 gap-3">
-          <h3 className="font-bold text-lg leading-tight text-gray-900">{movie.title || 'Unknown Title'}</h3>
+          <h3 className="font-bold text-lg leading-tight text-gray-900">{title}</h3>
           <button 
             onClick={() => toggleWatchlist(movie)} 
             className={`flex-shrink-0 transition-transform hover:scale-110 active:scale-95 ${isWatchlisted ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
@@ -220,7 +224,7 @@ function MovieCard({ movie, toggleWatchlist, isWatchlisted }) {
           </button>
         </div>
         <p className="text-sm text-gray-500 line-clamp-3 mt-auto">
-          {movie.description || movie.review || movie.overview || 'No description available for this title.'}
+          {description}
         </p>
       </div>
     </div>
