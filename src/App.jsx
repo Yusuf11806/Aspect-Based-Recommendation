@@ -16,34 +16,37 @@ export default function App() {
     fetch('/movies.json')
       .then(res => res.json())
       .then(data => {
-        // Ensure data is an array
         if (Array.isArray(data)) {
           setDatabase(data);
         } else if (data.movies && Array.isArray(data.movies)) {
           setDatabase(data.movies);
+        } else {
+          setDatabase([]);
         }
       })
-      .catch(err => console.error("Error loading movies:", err));
+      .catch(err => {
+        console.error("Error loading movies:", err);
+        setDatabase([]);
+      });
   }, []);
 
-  // Robust Search handling title and aspect-based NLP matching
+  // Bulletproof Search handling title and aspect-based NLP matching safely
   const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
+    if (!searchQuery.trim() || !Array.isArray(database)) return [];
     setIsFinding(true);
     
-    const query = searchQuery.toLowerCase().trim();
+    const query = String(searchQuery).toLowerCase().trim();
     const queryWords = query.split(/\s+/);
 
     let results = database.filter(movie => {
-      // Pull titles explicitly based on common CSV conventions
-      const movieTitle = (movie.title || movie.movie_title || movie.original_title || '').toLowerCase();
-      const movieReview = (movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || '').toLowerCase();
-      const movieAspects = (movie.aspects || movie.tags || movie.category || '').toLowerCase();
+      if (!movie) return false;
+      
+      // Safely convert all potential fields to strings to prevent crashes
+      const movieTitle = String(movie.title || movie.movie_title || movie.original_title || '').toLowerCase();
+      const movieReview = String(movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || '').toLowerCase();
+      const movieAspects = String(movie.aspects || movie.tags || movie.category || '').toLowerCase();
 
-      // Check if title matches directly
       const titleMatch = movieTitle.includes(query);
-
-      // Check aspect-based or NLP keyword match across reviews and tags
       const contentMatch = queryWords.every(word => movieReview.includes(word) || movieAspects.includes(word));
 
       return titleMatch || contentMatch;
@@ -109,7 +112,7 @@ export default function App() {
                     type="text" 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="e.g. mind-blowing plot or title..."
+                    placeholder="e.g. mind-blowing plot or aspect..."
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
@@ -212,12 +215,11 @@ export default function App() {
 }
 
 function MovieCard({ movie, toggleWatchlist, watchlist }) {
-  // Pull exact title fields from your CSV data structure
-  const title = movie.title || movie.movie_title || movie.original_title || 'Untitled Movie';
-  const description = movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || 'No review or description available.';
+  const title = String(movie.title || movie.movie_title || movie.original_title || 'Untitled Movie');
+  const description = String(movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || 'No review or description available.');
   const imageUrl = movie.posterUrl || (movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=500&q=80');
   
-  const isWatchlisted = !!watchlist.find(m => (m.title || m.movie_title || m.original_title) === title);
+  const isWatchlisted = !!watchlist.find(m => String(m.title || m.movie_title || m.original_title) === title);
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group flex flex-col">
