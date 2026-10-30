@@ -30,24 +30,28 @@ export default function App() {
       });
   }, []);
 
+  // Flexible Aspect-Based & Keyword Search
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() || !Array.isArray(database)) return [];
     setIsFinding(true);
     
     const query = String(searchQuery).toLowerCase().trim();
-    const queryWords = query.split(/\s+/);
+    const queryWords = query.split(/\s+/).filter(Boolean);
 
-    let results = database.filter(movie => {
+    let results = database.filter((movie, index) => {
       if (!movie) return false;
       
-      const movieTitle = String(movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name || '').toLowerCase();
+      const rawTitle = movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name || '';
       const movieReview = String(movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || '').toLowerCase();
-      const movieAspects = String(movie.aspects || movie.tags || movie.category || '').toLowerCase();
+      const movieAspects = String(movie.aspects || movie.tags || movie.category || movie.sentiment || '').toLowerCase();
+      
+      const combinedText = `${rawTitle} ${movieReview} ${movieAspects}`;
 
-      const titleMatch = movieTitle.includes(query);
-      const contentMatch = queryWords.every(word => movieReview.includes(word) || movieAspects.includes(word));
+      // Check if title matches directly, or if ANY of the typed search words/aspects match the content
+      const titleMatch = String(rawTitle).toLowerCase().includes(query);
+      const aspectMatch = queryWords.some(word => combinedText.includes(word));
 
-      return titleMatch || contentMatch;
+      return titleMatch || aspectMatch;
     });
     
     setTimeout(() => setIsFinding(false), 200);
@@ -60,12 +64,12 @@ export default function App() {
     setIsAuthModalOpen(false);
   };
 
-  const getMovieKey = (movie) => String(movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name || '');
+  const getMovieKey = (movie, index) => String(movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name || index);
 
-  const toggleWatchlist = (movie) => {
-    const movieKey = getMovieKey(movie);
-    if (watchlist.find(m => getMovieKey(m) === movieKey)) {
-      setWatchlist(watchlist.filter(m => getMovieKey(m) !== movieKey));
+  const toggleWatchlist = (movie, index) => {
+    const key = getMovieKey(movie, index);
+    if (watchlist.find((m, i) => getMovieKey(m, i) === key)) {
+      setWatchlist(watchlist.filter((m, i) => getMovieKey(m, i) !== key));
     } else {
       setWatchlist([...watchlist, movie]);
     }
@@ -149,7 +153,7 @@ export default function App() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {searchResults.map((movie, idx) => (
-                <MovieCard key={idx} movie={movie} toggleWatchlist={toggleWatchlist} watchlist={watchlist} />
+                <MovieCard key={idx} movie={movie} index={idx} toggleWatchlist={toggleWatchlist} watchlist={watchlist} />
               ))}
             </div>
           )
@@ -164,7 +168,7 @@ export default function App() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {watchlist.map((movie, idx) => (
-                  <MovieCard key={idx} movie={movie} toggleWatchlist={toggleWatchlist} watchlist={watchlist} />
+                  <MovieCard key={idx} movie={movie} index={idx} toggleWatchlist={toggleWatchlist} watchlist={watchlist} />
                 ))}
               </div>
             )}
@@ -214,22 +218,19 @@ export default function App() {
   );
 }
 
-function MovieCard({ movie, toggleWatchlist, watchlist }) {
-  // Extract title checking all common column variations
+function MovieCard({ movie, index, toggleWatchlist, watchlist }) {
   let rawTitle = movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name;
   
-  // If the CSV data only contains row numbers or empty text for titles, fallback gracefully
+  // If title is missing or just numbers from row indices, format it cleanly
   const title = (rawTitle && String(rawTitle).trim() !== '' && !/^\d+$/.test(String(rawTitle)))
     ? String(rawTitle)
-    : 'Featured Movie Selection';
+    : `Movie Review Item #${index + 1}`;
 
   const description = String(movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || 'No review or description available.');
   const imageUrl = movie.posterUrl || (movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=500&q=80');
   
-  const isWatchlisted = !!watchlist.find(m => {
-    let mTitle = m.title || m.Series_Title || m.movie_title || m.original_title || m.name;
-    return String(mTitle) === String(rawTitle);
-  });
+  const movieKey = String(rawTitle || index);
+  const isWatchlisted = !!watchlist.find((m, i) => String(m.title || m.Series_Title || m.movie_title || m.original_title || m.name || i) === movieKey);
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group flex flex-col">
@@ -248,7 +249,7 @@ function MovieCard({ movie, toggleWatchlist, watchlist }) {
         <div className="flex justify-between items-start mb-2 gap-3">
           <h3 className="font-bold text-lg leading-tight text-gray-900">{title}</h3>
           <button 
-            onClick={() => toggleWatchlist(movie)} 
+            onClick={() => toggleWatchlist(movie, index)} 
             className={`flex-shrink-0 transition-transform hover:scale-110 active:scale-95 ${isWatchlisted ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
           >
             <Heart fill={isWatchlisted ? "currentColor" : "none"} size={22} />
