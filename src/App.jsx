@@ -30,7 +30,6 @@ export default function App() {
       });
   }, []);
 
-  // Bulletproof Search handling title and aspect-based NLP matching safely
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() || !Array.isArray(database)) return [];
     setIsFinding(true);
@@ -41,8 +40,7 @@ export default function App() {
     let results = database.filter(movie => {
       if (!movie) return false;
       
-      // Safely convert all potential fields to strings to prevent crashes
-      const movieTitle = String(movie.title || movie.movie_title || movie.original_title || '').toLowerCase();
+      const movieTitle = String(movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name || '').toLowerCase();
       const movieReview = String(movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || '').toLowerCase();
       const movieAspects = String(movie.aspects || movie.tags || movie.category || '').toLowerCase();
 
@@ -62,10 +60,12 @@ export default function App() {
     setIsAuthModalOpen(false);
   };
 
+  const getMovieKey = (movie) => String(movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name || '');
+
   const toggleWatchlist = (movie) => {
-    const movieTitle = movie.title || movie.movie_title || movie.original_title;
-    if (watchlist.find(m => (m.title || m.movie_title || m.original_title) === movieTitle)) {
-      setWatchlist(watchlist.filter(m => (m.title || m.movie_title || m.original_title) !== movieTitle));
+    const movieKey = getMovieKey(movie);
+    if (watchlist.find(m => getMovieKey(m) === movieKey)) {
+      setWatchlist(watchlist.filter(m => getMovieKey(m) !== movieKey));
     } else {
       setWatchlist([...watchlist, movie]);
     }
@@ -215,11 +215,21 @@ export default function App() {
 }
 
 function MovieCard({ movie, toggleWatchlist, watchlist }) {
-  const title = String(movie.title || movie.movie_title || movie.original_title || 'Untitled Movie');
+  // Extract title checking all common column variations
+  let rawTitle = movie.title || movie.Series_Title || movie.movie_title || movie.original_title || movie.name;
+  
+  // If the CSV data only contains row numbers or empty text for titles, fallback gracefully
+  const title = (rawTitle && String(rawTitle).trim() !== '' && !/^\d+$/.test(String(rawTitle)))
+    ? String(rawTitle)
+    : 'Featured Movie Selection';
+
   const description = String(movie.review || movie.description || movie.overview || movie.summary || movie.text || movie.plot || 'No review or description available.');
   const imageUrl = movie.posterUrl || (movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=500&q=80');
   
-  const isWatchlisted = !!watchlist.find(m => String(m.title || m.movie_title || m.original_title) === title);
+  const isWatchlisted = !!watchlist.find(m => {
+    let mTitle = m.title || m.Series_Title || m.movie_title || m.original_title || m.name;
+    return String(mTitle) === String(rawTitle);
+  });
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group flex flex-col">
